@@ -5,3 +5,6 @@ lake-ai-agent/.env
 # Python cache
 __pycache__/
 *.pyc
+
+# JetBrains / PyCharm IDE configurations
+.idea/
