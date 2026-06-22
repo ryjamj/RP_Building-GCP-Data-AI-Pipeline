@@ -25,10 +25,18 @@ def fetch_usgs_to_dataframe(url):
     all_records = []
 
     for ts in time_series_list:
+        # --- High Level / site info ---
         site_info = ts.get("sourceInfo", {})
         site_name = site_info.get("siteName")
         site_code = site_info.get("siteCode", [{}])[0].get("value")
 
+        # --- geolocation info ---
+        geo_location = site_info.get("geoLocation", {}).get("geogLocation", {})
+        srs = geo_location.get("srs")
+        latitude = geo_location.get("latitude")
+        longitude = geo_location.get("longitude")
+
+        # --- variable info ---
         variable_info = ts.get("variable", {})
         param_code = variable_info.get("variableCode", [{}])[0].get("value")
         param_desc = variable_info.get("variableDescription")
@@ -50,6 +58,9 @@ def fetch_usgs_to_dataframe(url):
                 "value": measurement,
                 "unit": unit,
                 "qualification_code": ",".join(qualifiers),
+                "srs": srs,
+                "latitude": latitude,
+                "longitude": longitude,
             })
 
     df = pd.DataFrame(all_records)
@@ -60,6 +71,8 @@ def fetch_usgs_to_dataframe(url):
     # Clean data types so BigQuery accepts them smoothly
     df["value"] = pd.to_numeric(df["value"], errors="coerce")
     df["date"] = pd.to_datetime(df["date"])
+    df["latitude"] = pd.to_numeric(df["latitude"], errors="coerce")
+    df["longitude"] = pd.to_numeric(df["longitude"], errors="coerce")
 
     return df
 
