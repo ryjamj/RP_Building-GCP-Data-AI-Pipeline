@@ -1,9 +1,13 @@
-# Secrets
+# Local environment variables
 .env
 
 # Python cache
 __pycache__/
 *.pyc
+.ipynb_checkpoints/
+
+# Streamlit local runtime settings
+.streamlit/
 
 # JetBrains / PyCharm IDE configurations
 .idea/

@@ -51,8 +51,7 @@ def get_sensor_locations():
             latitude,
             longitude
         FROM `{project_id}.lake_data.sensor_logs`
-        WHERE latitude IS NOT NULL 
-          AND longitude IS NOT NULL
+        WHERE latitude IS NOT NULL AND longitude IS NOT NULL
         GROUP BY site_name, latitude, longitude
     """
 
@@ -62,14 +61,45 @@ def get_sensor_locations():
 # Run the function to fetch data
 try:
     sensor_df = get_sensor_locations()
+
+# Fallback dummy data so your app layout doesn't crash while troubleshooting schemas
 except Exception as e:
     st.error(f"Failed to connect to BigQuery: {e}")
-    # Fallback dummy data so your app layout doesn't crash while troubleshooting schemas
     sensor_df = pd.DataFrame({
         'site_name': ['Sensor Alpha', 'Sensor Beta'],
         'latitude': [40.43, 40.45],
         'longitude': [-111.89, -111.85]
     })
+
+
+@st.cache_data
+def get_sensor_trends():
+    """
+    Pulls historical data for all parameters over the past 7 days.
+    """
+    project_id = os.getenv("GCP_PROJECT_ID")
+    client = bigquery.Client(project=project_id)
+
+    query = f"""
+            SELECT 
+                date,
+                site_name,
+                value,
+                param_code
+            FROM `{project_id}.lake_data.sensor_logs`
+            WHERE CAST(date AS DATETIME) >= DATETIME_SUB(CURRENT_DATETIME(), INTERVAL 7 DAY) AND value IS NOT NULL
+            ORDER BY date ASC
+            """
+
+    query_job = client.query(query)
+    return query_job.to_dataframe()
+
+# Run the function to fetch historical trends
+try:
+    trends_df = get_sensor_trends()
+except Exception as e:
+    st.error(f"Failed to fetch trend data from BigQuery: {e}")
+    trends_df = pd.DataFrame(columns=['date', 'site_name', 'value', 'param_code'])
 
 
 # ---- 3. Main App Header ----
@@ -93,6 +123,37 @@ with col1:
 
     # view the raw data table underneath the map
     st.dataframe(sensor_df, use_container_width=True)
+
+    st.divider()
+
+    # ---- Interactive Analytics Section ----
+    st.subheader("📈 Historical Parameter Trends")
+
+    if not trends_df.empty:
+        # 1. Extract unique param_codes to populate the dropdown menu
+        unique_params = sorted(trends_df['param_code'].unique().tolist())
+
+        # 2. Create the Streamlit selectbox widget
+        selected_param = st.selectbox(
+            label="Select a parameter code to plot:",
+            options=unique_params,
+            index=0  # Defaults to the first item in the list
+        )
+
+        # 3. Filter the dataframe instantly using the user's dropdown choice
+        filtered_df = trends_df[trends_df['param_code'] == selected_param]
+
+        if not filtered_df.empty:
+            # Pivot the filtered data so rows are 'date', columns are 'site_name', and values are 'value'
+            chart_data = filtered_df.pivot(index='date', columns='site_name', values='value')
+
+            # Display the line chart matching the selected parameter
+            st.line_chart(chart_data, use_container_width=True)
+        else:
+            st.warning(f"No data available to plot for parameter code: {selected_param}")
+
+    else:
+        st.warning("No historical trend data found to plot.")
 
 with col2:
     st.header("🤖 Ask the Data Agent")
