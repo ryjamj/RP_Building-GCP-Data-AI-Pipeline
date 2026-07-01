@@ -36,10 +36,28 @@ st.set_page_config(
 
 
 # ---- 2. BigQuery Data Fetching Logic (with caching for performance) ----
+def get_bq_client():
+    """
+    Helper function to safely initialize the BigQuery client
+    whether running locally or on Streamlit Cloud.
+    """
+    project_id = os.getenv("GCP_PROJECT_ID")
+
+    # Check if we are running in Streamlit Cloud with service account secrets available
+    if "GCP_CREDENTIALS" in st.secrets:
+        from google.oauth2 import service_account
+        credentials_dict = dict(st.secrets["GCP_CREDENTIALS"])
+        credentials = service_account.Credentials.from_service_account_info(credentials_dict)
+        return bigquery.Client(project=project_id, credentials=credentials)
+
+    # Local fallback (uses local environment gcloud auth application-default login)
+    return bigquery.Client(project=project_id)
+
+
 @st.cache_data
 def get_sensor_locations():
-    # Pull the project ID securely from the environment variables
     project_id = os.getenv("GCP_PROJECT_ID")
+    client = get_bq_client()  # <-- Updated here
 
     # Initialize the client using that variable
     client = bigquery.Client(project=project_id)
@@ -74,11 +92,8 @@ except Exception as e:
 
 @st.cache_data
 def get_sensor_trends():
-    """
-    Pulls historical data for all parameters over the past 7 days.
-    """
     project_id = os.getenv("GCP_PROJECT_ID")
-    client = bigquery.Client(project=project_id)
+    client = get_bq_client()
 
     query = f"""
             SELECT 
